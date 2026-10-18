@@ -48,7 +48,10 @@ public enum OpenMode {
   ONEDRIVE,
 
   ANDROID_DATA,
-  TRASH_BIN;
+  TRASH_BIN,
+
+  /** WebDAV (RFC 4918) */
+  WEBDAV;
 
   /**
    * Get open mode based on the id assigned. Generally used to retrieve this type after config

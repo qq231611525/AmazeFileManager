@@ -27,6 +27,8 @@ import static com.amaze.filemanager.filesystem.ftp.NetCopyClientConnectionPool.S
 import static com.amaze.filemanager.filesystem.ftp.NetCopyConnectionInfo.MULTI_SLASH;
 import static com.amaze.filemanager.filesystem.smb.CifsContexts.SMB_URI_PREFIX;
 import static com.amaze.filemanager.filesystem.ssh.SFTPClientExtKt.READ_AHEAD_MAX_UNCONFIRMED_READS;
+import static com.amaze.filemanager.filesystem.webdav.WebdavContexts.WEBDAV_URI_PREFIX;
+import static com.amaze.filemanager.filesystem.webdav.WebdavContexts.WEBDAVS_URI_PREFIX;
 import static com.amaze.filemanager.filesystem.ssh.SshClientUtils.sftpGetSize;
 
 import java.io.File;
@@ -154,7 +156,13 @@ public class HybridFile {
   public HybridFile(OpenMode mode, String path, String name, boolean isDirectory) {
     this(mode, path);
     this.name = name;
-    if (path.startsWith(SMB_URI_PREFIX) || isSmb() || isDocumentFile() || isOtgFile()) {
+    if (path.startsWith(SMB_URI_PREFIX)
+        || path.startsWith(WEBDAV_URI_PREFIX)
+        || path.startsWith(WEBDAVS_URI_PREFIX)
+        || isSmb()
+        || isWebdav()
+        || isDocumentFile()
+        || isOtgFile()) {
       Uri.Builder pathBuilder = Uri.parse(this.path).buildUpon().appendEncodedPath(name);
       if ((path.startsWith(SMB_URI_PREFIX) || isSmb()) && isDirectory) {
         pathBuilder.appendEncodedPath("/");
@@ -176,6 +184,8 @@ public class HybridFile {
   public void generateMode(Context context) {
     if (path.startsWith(SMB_URI_PREFIX)) {
       mode = OpenMode.SMB;
+    } else if (path.startsWith(WEBDAV_URI_PREFIX) || path.startsWith(WEBDAVS_URI_PREFIX)) {
+      mode = OpenMode.WEBDAV;
     } else if (path.startsWith(SSH_URI_PREFIX)) {
       mode = OpenMode.SFTP;
     } else if (path.startsWith(OTGUtil.PREFIX_OTG)) {
@@ -249,6 +259,10 @@ public class HybridFile {
 
   public boolean isSmb() {
     return mode == OpenMode.SMB;
+  }
+
+  public boolean isWebdav() {
+    return mode == OpenMode.WEBDAV;
   }
 
   public boolean isSftp() {
@@ -1069,7 +1083,7 @@ public class HybridFile {
   }
 
   public String getReadablePath(String path) {
-    if (isSftp() || isSmb() || isFtp()) return parseAndFormatUriForDisplay(path);
+    if (isSftp() || isSmb() || isFtp() || isWebdav()) return parseAndFormatUriForDisplay(path);
     else return path;
   }
 
