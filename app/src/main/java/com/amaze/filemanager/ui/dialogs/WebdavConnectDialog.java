@@ -154,7 +154,7 @@ public class WebdavConnectDialog extends DialogFragment {
                   if (!TextUtils.isEmpty(user)) {
                     try {
                       String encPass =
-                          com.amaze.filemanager.utils.PasswordUtil.encryptPassword(
+                          com.amaze.filemanager.utils.PasswordUtil.INSTANCE.encryptPassword(
                               getActivity(), pass, android.util.Base64.URL_SAFE);
                       android.net.Uri uri = android.net.Uri.parse(webdavUri);
                       String authority =
