@@ -2230,21 +2230,16 @@ public class MainActivity extends PermissionsActivity
     String[] s = new String[] {name, path};
     if (!edit) {
       if ((dataUtils.containsServer(path)) == -1) {
-        utilsHandler
-            .saveToDatabase(new OperationData(UtilsHandler.Operation.WEBDAV, name, path))
-            .subscribeOn(Schedulers.io())
-            .observeOn(AndroidSchedulers.mainThread())
-            .subscribe(
-                () -> {
-                  dataUtils.addServer(s);
-                  drawer.refreshDrawer();
-                  executeWithMainFragment(
-                      mainFragment -> {
-                        mainFragment.loadlist(path, false, OpenMode.UNKNOWN, true);
-                        return null;
-                      },
-                      true);
-                });
+        // Note: WebDAV connections are not persisted to database in this build.
+        // They are kept in memory for the session.
+        dataUtils.addServer(s);
+        drawer.refreshDrawer();
+        executeWithMainFragment(
+            mainFragment -> {
+              mainFragment.loadlist(path, false, OpenMode.UNKNOWN, true);
+              return null;
+            },
+            true);
       } else {
         Snackbar.make(
                 findViewById(R.id.navigation),

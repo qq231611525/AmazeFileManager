@@ -66,7 +66,6 @@ class UtilsHandler(
         BOOKMARKS,
         SMB,
         SFTP,
-        WEBDAV,
     }
 
     /**
@@ -126,12 +125,6 @@ class UtilsHandler(
                             )
                             .subscribeOn(Schedulers.io())
                     }
-            Operation.WEBDAV ->
-                utilitiesDatabase.webdavEntryDao().run {
-                    deleteByNameAndPath(operationData.name, operationData.path)
-                        .andThen(insert(WebdavEntry(operationData.name, operationData.path)))
-                        .subscribeOn(Schedulers.io())
-                }
 
             else -> throw IllegalStateException("Unidentified operation!")
         }
