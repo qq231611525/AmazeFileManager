@@ -37,12 +37,14 @@ import com.amaze.filemanager.database.daos.HistoryEntryDao
 import com.amaze.filemanager.database.daos.ListEntryDao
 import com.amaze.filemanager.database.daos.SftpEntryDao
 import com.amaze.filemanager.database.daos.SmbEntryDao
+import com.amaze.filemanager.database.daos.WebdavEntryDao
 import com.amaze.filemanager.database.models.utilities.Bookmark
 import com.amaze.filemanager.database.models.utilities.Grid
 import com.amaze.filemanager.database.models.utilities.Hidden
 import com.amaze.filemanager.database.models.utilities.History
 import com.amaze.filemanager.database.models.utilities.SftpEntry
 import com.amaze.filemanager.database.models.utilities.SmbEntry
+import com.amaze.filemanager.database.models.utilities.WebdavEntry
 import com.amaze.filemanager.filesystem.ftp.NetCopyConnectionInfo.Companion.AT
 import com.amaze.filemanager.filesystem.ftp.NetCopyConnectionInfo.Companion.COLON
 import com.amaze.filemanager.utils.PasswordUtil.decryptPassword
@@ -66,6 +68,7 @@ import java.security.GeneralSecurityException
         com.amaze.filemanager.database.models.utilities.List::class,
         SmbEntry::class,
         SftpEntry::class,
+        WebdavEntry::class,
     ],
     version = UtilitiesDatabase.DATABASE_VERSION,
     exportSchema = false,
@@ -107,10 +110,15 @@ abstract class UtilitiesDatabase : RoomDatabase() {
      */
     abstract fun sftpEntryDao(): SftpEntryDao
 
+    /**
+     * Returns DAO for [WebdavEntry] objects.
+     */
+    abstract fun webdavEntryDao(): WebdavEntryDao
+
     companion object {
         private val logger = LoggerFactory.getLogger(UtilitiesDatabase::class.java)
         private const val DATABASE_NAME = "utilities.db"
-        const val DATABASE_VERSION = 7
+        const val DATABASE_VERSION = 8
         const val TABLE_HISTORY = "history"
         const val TABLE_HIDDEN = "hidden"
         const val TABLE_LIST = "list"
@@ -118,6 +126,7 @@ abstract class UtilitiesDatabase : RoomDatabase() {
         const val TABLE_BOOKMARKS = "bookmarks"
         const val TABLE_SMB = "smb"
         const val TABLE_SFTP = "sftp"
+        const val TABLE_WEBDAV = "webdav"
         const val COLUMN_ID = "_id"
         const val COLUMN_PATH = "path"
         const val COLUMN_NAME = "name"
@@ -209,6 +218,18 @@ abstract class UtilitiesDatabase : RoomDatabase() {
                 " TEXT," +
                 COLUMN_PRIVATE_KEY +
                 " TEXT" +
+                ");"
+        )
+        private const val queryWebdav = (
+            "CREATE TABLE IF NOT EXISTS " +
+                TABLE_WEBDAV +
+                " (" +
+                COLUMN_ID +
+                " INTEGER PRIMARY KEY NOT NULL," +
+                COLUMN_NAME +
+                " TEXT NOT NULL," +
+                COLUMN_PATH +
+                " TEXT UNIQUE NOT NULL" +
                 ");"
         )
 
@@ -587,6 +608,13 @@ abstract class UtilitiesDatabase : RoomDatabase() {
                 }
             }
 
+        internal val MIGRATION_7_8: Migration =
+            object : Migration(7, DATABASE_VERSION) {
+                override fun migrate(database: SupportSQLiteDatabase) {
+                    database.execSQL(queryWebdav)
+                }
+            }
+
         /**
          * Initialize the database. Optionally, may provide a custom way to create the database
          * with supplied [Context].
@@ -608,6 +636,7 @@ abstract class UtilitiesDatabase : RoomDatabase() {
                     MIGRATION_4_5,
                     MIGRATION_5_6,
                     MIGRATION_6_7,
+                    MIGRATION_7_8,
                 )
                 .build()
         }
