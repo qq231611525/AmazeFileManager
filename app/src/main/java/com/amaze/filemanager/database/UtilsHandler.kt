@@ -32,7 +32,6 @@ import com.amaze.filemanager.database.models.utilities.Hidden
 import com.amaze.filemanager.database.models.utilities.History
 import com.amaze.filemanager.database.models.utilities.SftpEntry
 import com.amaze.filemanager.database.models.utilities.SmbEntry
-import com.amaze.filemanager.database.models.utilities.WebdavEntry
 import com.googlecode.concurrenttrees.radix.ConcurrentRadixTree
 import com.googlecode.concurrenttrees.radix.node.concrete.DefaultCharArrayNodeFactory
 import com.googlecode.concurrenttrees.radix.node.concrete.voidvalue.VoidValue
