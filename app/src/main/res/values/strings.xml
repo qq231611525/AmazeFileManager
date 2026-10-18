@@ -507,7 +507,6 @@
     <string name="ftp_status_title">Status</string>
     <string name="ftp_port">Port</string>
     <string name="ftp_login">Login</string>
-    <string name="field_empty">Field can\'t be empty</string>
     <string name="ftp_timeout">Idle timeout</string>
     <string name="ftp_seconds">Seconds</string>
     <string name="intellihide_toolbar_title">Intellihide Toolbar</string>
