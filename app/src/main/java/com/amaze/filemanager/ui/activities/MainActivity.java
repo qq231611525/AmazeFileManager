@@ -118,6 +118,8 @@ import com.amaze.filemanager.ui.dialogs.RenameBookmark.BookmarkCallback;
 import com.amaze.filemanager.ui.dialogs.SftpConnectDialog;
 import com.amaze.filemanager.ui.dialogs.SmbConnectDialog;
 import com.amaze.filemanager.ui.dialogs.SmbConnectDialog.SmbConnectionListener;
+import com.amaze.filemanager.ui.dialogs.WebdavConnectDialog;
+import com.amaze.filemanager.ui.dialogs.WebdavConnectDialog.WebdavConnectionListener;
 import com.amaze.filemanager.ui.drag.TabFragmentBottomDragListener;
 import com.amaze.filemanager.ui.fragments.AppsListFragment;
 import com.amaze.filemanager.ui.fragments.CloudSheetFragment;
@@ -214,6 +216,7 @@ import kotlin.text.Charsets;
 
 public class MainActivity extends PermissionsActivity
     implements SmbConnectionListener,
+        WebdavConnectionListener,
         BookmarkCallback,
         CloudConnectionCallbacks,
         LoaderManager.LoaderCallbacks<Cursor>,
@@ -2218,6 +2221,44 @@ public class MainActivity extends PermissionsActivity
       Collections.sort(dataUtils.getServers(), new BookSorter());
       drawer.refreshDrawer();
       // mainActivity.grid.addPath(name, encryptedPath, DataUtils.SMB, 1);
+    }
+  }
+
+  @Override
+  @SuppressLint("CheckResult")
+  public void onWebdavConnection(String name, String path, boolean edit) {
+    String[] s = new String[] {name, path};
+    if (!edit) {
+      if ((dataUtils.containsServer(path)) == -1) {
+        utilsHandler
+            .saveToDatabase(new OperationData(UtilsHandler.Operation.WEBDAV, name, path))
+            .subscribeOn(Schedulers.io())
+            .observeOn(AndroidSchedulers.mainThread())
+            .subscribe(
+                () -> {
+                  dataUtils.addServer(s);
+                  drawer.refreshDrawer();
+                  executeWithMainFragment(
+                      mainFragment -> {
+                        mainFragment.loadlist(path, false, OpenMode.UNKNOWN, true);
+                        return null;
+                      },
+                      true);
+                });
+      } else {
+        Snackbar.make(
+                findViewById(R.id.navigation),
+                getString(R.string.connection_exists),
+                Snackbar.LENGTH_SHORT)
+            .show();
+      }
+    } else {
+      // Edit: remove old, add new
+      int i = dataUtils.containsServer(new String[] {name, path});
+      if (i != -1) {
+        dataUtils.removeServer(i);
+      }
+      onWebdavConnection(name, path, false);
     }
   }
 

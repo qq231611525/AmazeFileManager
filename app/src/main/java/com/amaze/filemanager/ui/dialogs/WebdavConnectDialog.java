@@ -66,6 +66,11 @@ public class WebdavConnectDialog extends DialogFragment {
   @NonNull
   @Override
   public Dialog onCreateDialog(Bundle savedInstanceState) {
+    // Auto-wire listener from hosting Activity, same pattern as SmbConnectDialog
+    if (getActivity() instanceof WebdavConnectionListener && webdavConnectionListener == null) {
+      webdavConnectionListener = (WebdavConnectionListener) getActivity();
+    }
+
     utilsProvider = getActivity() instanceof com.amaze.filemanager.ui.activities.MainActivity
         ? ((com.amaze.filemanager.ui.activities.MainActivity) getActivity()).getUtilsProvider()
         : null;

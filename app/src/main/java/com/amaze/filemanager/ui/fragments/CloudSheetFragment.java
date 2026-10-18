@@ -29,6 +29,7 @@ import com.amaze.filemanager.ui.activities.MainActivity;
 import com.amaze.filemanager.ui.dialogs.GeneralDialogCreation;
 import com.amaze.filemanager.ui.dialogs.SftpConnectDialog;
 import com.amaze.filemanager.ui.dialogs.SmbSearchDialog;
+import com.amaze.filemanager.ui.dialogs.WebdavConnectDialog;
 import com.amaze.filemanager.ui.theme.AppTheme;
 import com.amaze.filemanager.utils.Utils;
 import com.google.android.material.bottomsheet.BottomSheetBehavior;
@@ -60,6 +61,7 @@ public class CloudSheetFragment extends BottomSheetDialogFragment implements Vie
   private View rootView;
   private LinearLayout mSmbLayout,
       mScpLayout,
+      mWebdavLayout,
       mDropboxLayout,
       mBoxLayout,
       mGoogleDriveLayout,
@@ -107,6 +109,7 @@ public class CloudSheetFragment extends BottomSheetDialogFragment implements Vie
 
     mSmbLayout = rootView.findViewById(R.id.linear_layout_smb);
     mScpLayout = rootView.findViewById(R.id.linear_layout_scp);
+    mWebdavLayout = rootView.findViewById(R.id.linear_layout_webdav);
     mBoxLayout = rootView.findViewById(R.id.linear_layout_box);
     mDropboxLayout = rootView.findViewById(R.id.linear_layout_dropbox);
     mGoogleDriveLayout = rootView.findViewById(R.id.linear_layout_google_drive);
@@ -132,6 +135,7 @@ public class CloudSheetFragment extends BottomSheetDialogFragment implements Vie
 
     mSmbLayout.setOnClickListener(this);
     mScpLayout.setOnClickListener(this);
+    mWebdavLayout.setOnClickListener(this);
     mBoxLayout.setOnClickListener(this);
     mDropboxLayout.setOnClickListener(this);
     mGoogleDriveLayout.setOnClickListener(this);
@@ -166,6 +170,13 @@ public class CloudSheetFragment extends BottomSheetDialogFragment implements Vie
       args.putBoolean("edit", false);
       sftpConnectDialog.setArguments(args);
       sftpConnectDialog.show(getFragmentManager(), "tab");
+    } else if (v.getId() == R.id.linear_layout_webdav) {
+      dismiss();
+      WebdavConnectDialog webdavConnectDialog = new WebdavConnectDialog();
+      Bundle args = new Bundle();
+      args.putBoolean(WebdavConnectDialog.ARG_EDIT, false);
+      webdavConnectDialog.setArguments(args);
+      webdavConnectDialog.show(requireActivity().getSupportFragmentManager(), WebdavConnectDialog.TAG);
     } else if (v.getId() == R.id.linear_layout_box) {
       ((MainActivity) requireActivity()).addConnection(OpenMode.BOX);
     } else if (v.getId() == R.id.linear_layout_dropbox) {
