@@ -1,6 +1,6 @@
 [versions]
 compileSdk = "34"
-minSdk = "26"
+minSdk = "21"
 targetSdk = "35"
 kotlin = "1.9.25"
 ndk = "28.2.13676358" #r28c
@@ -66,7 +66,6 @@ gson = "2.11.0"
 rxAndroid = "2.1.1"
 rxJava = "2.2.9"
 okHttp = "4.12.0"
-dav4jvm = "main-SNAPSHOT"
 acraCore = "5.12.0"
 leakcanaryAndroid = "2.13"
 mpAndroidChart = "v3.0.2"
@@ -151,7 +150,6 @@ jcifs-ng = { module = "eu.agno3.jcifs:jcifs-ng", version.ref = "jcifs" }
 speedDial = { module = "com.leinardi.android:speed-dial", version.ref = "fabSpeedDial" }
 sshj = { module = "com.hierynomus:sshj", version.ref = "sshj" }
 okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okHttp" }
-dav4jvm = { module = "com.github.bitfireAT:dav4jvm", version.ref = "dav4jvm" }
 
 junit = { module = "junit:junit", version.ref = "junit" }
 awaitility = { module = "org.awaitility:awaitility", version.ref = "awaitility" }

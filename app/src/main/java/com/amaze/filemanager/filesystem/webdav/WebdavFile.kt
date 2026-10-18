@@ -20,24 +20,26 @@
 package com.amaze.filemanager.filesystem.webdav
 
 import android.util.Log
-import at.bitfire.dav4jvm.DavResource
-import at.bitfire.dav4jvm.Response
-import at.bitfire.dav4jvm.property.DisplayName
-import at.bitfire.dav4jvm.property.GetContentLength
-import at.bitfire.dav4jvm.property.GetContentType
-import at.bitfire.dav4jvm.property.GetLastModified
-import at.bitfire.dav4jvm.property.ResourceType
+import android.util.Xml
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.xmlpull.v1.XmlPullParser
 
 /**
- * Thin wrapper around dav4jvm's [DavResource] that exposes the file
- * operations Amaze's [com.amaze.filemanager.filesystem.HybridFile]
- * needs: list, stat, download, upload, mkdir, delete, move.
+ * Minimal WebDAV client built on OkHttp (no external WebDAV library).
+ * Exposes the file operations Amaze's [com.amaze.filemanager.filesystem.HybridFile]
+ * needs: list, download, upload, mkdir, delete, move.
+ *
+ * Uses raw HTTP methods: PROPFIND (depth 1 for listing), GET, PUT,
+ * MKCOL, DELETE, MOVE. Parses PROPFIND multistatus XML responses.
  */
 class WebdavFile(
     webdavUri: String,
@@ -48,7 +50,6 @@ class WebdavFile(
 
     private val httpUrl = WebdavContexts.toHttpUrl(webdavUri).toHttpUrl()
     private val client = WebdavContexts.getClient(webdavUri, username, password)
-    private val resource = DavResource(client, httpUrl)
 
     /** Simple stat info for one remote entry. */
     data class Entry(
@@ -60,56 +61,157 @@ class WebdavFile(
         val uri: String,
     )
 
+    companion object {
+        private const val PROPFIND_BODY = """<?xml version="1.0" encoding="utf-8"?>
+<D:propfind xmlns:D="DAV:">
+  <D:prop>
+    <D:displayname/>
+    <D:getcontentlength/>
+    <D:getcontenttype/>
+    <D:getlastmodified/>
+    <D:resourcetype/>
+  </D:prop>
+</D:propfind>"""
+
+        private val HTTP_DATE_FORMATS = listOf(
+            SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", Locale.US),
+            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US),
+        ).apply {
+            forEach { it.timeZone = TimeZone.getTimeZone("GMT") }
+        }
+
+        private fun parseHttpDate(dateStr: String?): Long {
+            if (dateStr.isNullOrEmpty()) return 0L
+            for (format in HTTP_DATE_FORMATS) {
+                try {
+                    synchronized(format) {
+                        return format.parse(dateStr)?.time ?: 0L
+                    }
+                } catch (e: Exception) {
+                    // Try next format
+                }
+            }
+            return 0L
+        }
+    }
+
     /**
      * Lists the direct children of this collection (depth 1).
      * Returns empty list on error; check logs for details.
      */
     @Throws(IOException::class)
     fun list(): List<Entry> {
-        val responses = mutableListOf<Response>()
-        resource.propfind(
-            depth = 1,
-            callback = { response, _ -> responses.add(response) },
-            DisplayName.NAME,
-            GetContentLength.NAME,
-            GetContentType.NAME,
-            GetLastModified.NAME,
-            ResourceType.NAME,
-        )
-        // First response is the collection itself; skip it.
-        return responses.drop(1).mapNotNull { response ->
-            try {
-                val href = response.href.toString()
-                val name = href.substringAfterLast("/").ifEmpty {
-                    // Collection href ends with "/"
-                    href.trimEnd('/').substringAfterLast("/")
-                }
-                if (name.isEmpty()) return@mapNotNull null
-                val resourceType = response[ResourceType::class.java]
-                val isDir = resourceType?.types?.any { it.name == "collection" } == true
-                val size = response[GetContentLength::class.java]?.contentLength ?: 0L
-                val lastModified =
-                    response[GetLastModified::class.java]?.lastModified?.toEpochSecond()
-                        ?.times(1000) ?: 0L
-                val childHttpUrl = httpUrl.toString().trimEnd('/') + "/" + name
-                Entry(
-                    name = name,
-                    isDirectory = isDir,
-                    size = size,
-                    lastModified = lastModified,
-                    uri = WebdavContexts.toWebdavUri(childHttpUrl),
-                )
-            } catch (e: Exception) {
-                Log.w(tag, "Skipping malformed PROPFIND entry", e)
-                null
+        val request = Request.Builder()
+            .url(httpUrl)
+            .method("PROPFIND", PROPFIND_BODY.toRequestBody("application/xml".toMediaTypeOrNull()))
+            .header("Depth", "1")
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                throw IOException("PROPFIND failed: ${response.code} for $httpUrl")
             }
+            val body = response.body?.string()
+                ?: throw IOException("Empty PROPFIND response for $httpUrl")
+            return parsePropfindResponse(body)
         }
+    }
+
+    private fun parsePropfindResponse(xml: String): List<Entry> {
+        val entries = mutableListOf<Entry>()
+        try {
+            val parser = Xml.newPullParser()
+            parser.setInput(xml.reader())
+
+            var eventType = parser.eventType
+            var currentHref: String? = null
+            var currentDisplayName: String? = null
+            var currentContentLength: Long = 0L
+            var currentLastModified: Long = 0L
+            var currentIsCollection = false
+            var inResponse = false
+
+            while (eventType != XmlPullParser.END_DOCUMENT) {
+                when (eventType) {
+                    XmlPullParser.START_TAG -> {
+                        when (parser.name) {
+                            "response" -> {
+                                inResponse = true
+                                currentHref = null
+                                currentDisplayName = null
+                                currentContentLength = 0L
+                                currentLastModified = 0L
+                                currentIsCollection = false
+                            }
+                            "href" -> if (inResponse) {
+                                currentHref = parser.nextText()
+                            }
+                            "displayname" -> if (inResponse) {
+                                currentDisplayName = parser.nextText()
+                            }
+                            "getcontentlength" -> if (inResponse) {
+                                currentContentLength = parser.nextText()?.toLongOrNull() ?: 0L
+                            }
+                            "getlastmodified" -> if (inResponse) {
+                                currentLastModified = parseHttpDate(parser.nextText())
+                            }
+                            "collection" -> if (inResponse) {
+                                currentIsCollection = true
+                            }
+                        }
+                    }
+                    XmlPullParser.END_TAG -> {
+                        if (parser.name == "response" && inResponse) {
+                            inResponse = false
+                            // Skip the collection itself (first response)
+                            // The href of the collection itself ends with the same path
+                            val href = currentHref ?: ""
+                            val basePath = httpUrl.encodedPath.trimEnd('/')
+                            val hrefPath = href.trimEnd('/')
+
+                            // Skip if this is the parent collection itself
+                            if (hrefPath != basePath && hrefPath.isNotEmpty()) {
+                                val name = currentDisplayName
+                                    ?: href.substringAfterLast("/").takeIf { it.isNotEmpty() }
+                                    ?: href.trimEnd('/').substringAfterLast("/")
+
+                                if (name.isNotEmpty()) {
+                                    val childHttpUrl = httpUrl.toString().trimEnd('/') + "/" + name
+                                    entries.add(
+                                        Entry(
+                                            name = name,
+                                            isDirectory = currentIsCollection,
+                                            size = currentContentLength,
+                                            lastModified = currentLastModified,
+                                            uri = WebdavContexts.toWebdavUri(childHttpUrl),
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                eventType = parser.next()
+            }
+        } catch (e: Exception) {
+            Log.w(tag, "Failed to parse PROPFIND response", e)
+            throw IOException("Failed to parse PROPFIND response", e)
+        }
+        return entries
     }
 
     /** Downloads the remote file into [output]. */
     @Throws(IOException::class)
     fun download(output: OutputStream) {
-        resource.get("*/*") { response ->
+        val request = Request.Builder()
+            .url(httpUrl)
+            .get()
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                throw IOException("GET failed: ${response.code} for $httpUrl")
+            }
             response.body?.byteStream()?.use { input ->
                 input.copyTo(output)
             } ?: throw IOException("Empty response body for $httpUrl")
@@ -123,43 +225,80 @@ class WebdavFile(
         contentLength: Long,
         contentType: String = "application/octet-stream",
     ) {
-        val body =
-            input.readBytes().toRequestBody(contentType.toMediaTypeOrNull())
-        // dav4jvm put() is synchronous when no callback threading is involved
-        resource.put(body)
+        val body = input.readBytes().toRequestBody(contentType.toMediaTypeOrNull())
+        val request = Request.Builder()
+            .url(httpUrl)
+            .put(body)
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful && response.code != 201 && response.code != 204) {
+                throw IOException("PUT failed: ${response.code} for $httpUrl")
+            }
+        }
         Log.d(tag, "Uploaded $contentLength bytes to $httpUrl")
     }
 
     /** Creates a collection (directory) at this path. */
     @Throws(IOException::class)
     fun mkdir() {
-        resource.mkCol(null, null)
+        val request = Request.Builder()
+            .url(httpUrl)
+            .method("MKCOL", null)
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful && response.code != 201) {
+                throw IOException("MKCOL failed: ${response.code} for $httpUrl")
+            }
+        }
     }
 
     /** Deletes the file or (empty or not) collection at this path. */
     @Throws(IOException::class)
     fun delete() {
-        resource.delete()
+        val request = Request.Builder()
+            .url(httpUrl)
+            .delete()
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful && response.code != 204) {
+                throw IOException("DELETE failed: ${response.code} for $httpUrl")
+            }
+        }
     }
 
     /** Moves/renames this resource to [destinationWebdavUri]. */
     @Throws(IOException::class)
     fun moveTo(destinationWebdavUri: String) {
-        val destUrl = WebdavContexts.toHttpUrl(destinationWebdavUri).toHttpUrl()
-        val dest = DavResource(client, destUrl)
-        resource.move(dest, overwrite = false)
+        val destUrl = WebdavContexts.toHttpUrl(destinationWebdavUri)
+        val request = Request.Builder()
+            .url(httpUrl)
+            .method("MOVE", null)
+            .header("Destination", destUrl)
+            .header("Overwrite", "F")
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful && response.code != 201 && response.code != 204) {
+                throw IOException("MOVE failed: ${response.code} for $httpUrl")
+            }
+        }
     }
 
     /** Returns true if the remote resource exists. */
     fun exists(): Boolean {
         return try {
-            var found = false
-            resource.propfind(
-                depth = 0,
-                callback = { _, _ -> found = true },
-                DisplayName.NAME,
-            )
-            found
+            val request = Request.Builder()
+                .url(httpUrl)
+                .method("PROPFIND", PROPFIND_BODY.toRequestBody("application/xml".toMediaTypeOrNull()))
+                .header("Depth", "0")
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                response.isSuccessful
+            }
         } catch (e: Exception) {
             Log.d(tag, "exists() check failed for $httpUrl", e)
             false
