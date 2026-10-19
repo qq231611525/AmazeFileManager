@@ -2244,6 +2244,18 @@ public class MainActivity extends PermissionsActivity
                         return null;
                       },
                       true);
+                },
+                throwable -> {
+                  // Log the error and show a message to the user
+                  android.util.Log.e(
+                      "MainActivity",
+                      "Failed to save WebDAV connection",
+                      throwable);
+                  Snackbar.make(
+                          findViewById(R.id.navigation),
+                          "保存 WebDAV 连接失败: " + throwable.getMessage(),
+                          Snackbar.LENGTH_LONG)
+                      .show();
                 });
       } else {
         Snackbar.make(
